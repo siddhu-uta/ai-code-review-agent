@@ -57,3 +57,4 @@ class ReviewResponse(BaseModel):
     error: Optional[str] = None
     created_at: Optional[str] = None
     completed_at: Optional[str] = None
+    latency_ms: Optional[int] = None

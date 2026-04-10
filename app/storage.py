@@ -64,12 +64,21 @@ def get_review(review_id: str) -> Optional[ReviewResponse]:
     if not item:
         return None
 
+    created_at = item.get("created_at")
+    completed_at = item.get("completed_at")
+
+    latency_ms: Optional[int] = None
+    if created_at and completed_at:
+        delta = datetime.fromisoformat(completed_at) - datetime.fromisoformat(created_at)
+        latency_ms = int(delta.total_seconds() * 1000)
+
     return ReviewResponse(
         review_id=item["review_id"],
         status=item["status"],
         pr_url=item["pr_url"],
         review=item.get("review"),
         error=item.get("error"),
-        created_at=item.get("created_at"),
-        completed_at=item.get("completed_at"),
+        created_at=created_at,
+        completed_at=completed_at,
+        latency_ms=latency_ms,
     )
