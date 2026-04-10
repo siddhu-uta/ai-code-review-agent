@@ -3,6 +3,7 @@ name: Test → Build → Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:  # allows manual trigger from GitHub Actions UI
 
 env:
   AWS_REGION: us-east-1
