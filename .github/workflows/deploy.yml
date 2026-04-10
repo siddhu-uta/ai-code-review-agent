@@ -1,0 +1,92 @@
+name: Test → Build → Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: ai-code-review-agent
+  STACK_NAME: ai-code-review-agent
+
+jobs:
+  # ── 1. Tests ────────────────────────────────────────────────────────────────
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-asyncio
+
+      - name: Run tests
+        env:
+          ANTHROPIC_API_KEY: test-key
+          GITHUB_TOKEN: test-token
+          API_SECRET_KEY: test-secret
+          DYNAMODB_TABLE: code-reviews
+        run: pytest tests/ -v
+
+  # ── 2. Build & Deploy ───────────────────────────────────────────────────────
+  deploy:
+    name: Build image → Push ECR → Deploy stack
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required for OIDC auth with AWS
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC — no long-lived keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Docker image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          # Also tag as latest for convenience
+          docker tag "$IMAGE_URI" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Deploy CloudFormation stack
+        env:
+          IMAGE_URI: ${{ steps.build-image.outputs.image_uri }}
+        run: |
+          aws cloudformation deploy \
+            --template-file template.yaml \
+            --stack-name $STACK_NAME \
+            --parameter-overrides \
+              ImageUri="$IMAGE_URI" \
+              AnthropicApiKey="${{ secrets.ANTHROPIC_API_KEY }}" \
+              GithubToken="${{ secrets.GITHUB_TOKEN_SECRET }}" \
+              ApiSecretKey="${{ secrets.API_SECRET_KEY }}" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+
+      - name: Print API URL
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text
