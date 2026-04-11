@@ -1,14 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
 Description: AI Code Review Agent — FastAPI + Claude (Bedrock) + Lambda + DynamoDB
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 Parameters:
   ImageUri:
     Type: String
-    Description: >
-      ECR image URI for the Lambda function.
-      Example: 123456789012.dkr.ecr.us-east-1.amazonaws.com/ai-code-review-agent:abc1234
+    Description: ECR image URI (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/ai-code-review-agent:abc1234)
 
   GithubToken:
     Type: String
@@ -25,15 +22,10 @@ Parameters:
     Default: "us.anthropic.claude-sonnet-4-5-20250514-v1:0"
     Description: Bedrock cross-region inference model ID
 
-# ── Globals ──────────────────────────────────────────────────────────────────
-Globals:
-  Function:
-    Timeout: 300
-    MemorySize: 512
-
 # ── Resources ────────────────────────────────────────────────────────────────
 Resources:
 
+  # ── DynamoDB ──────────────────────────────────────────────────────────────
   ReviewsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -46,58 +38,111 @@ Resources:
         - AttributeName: review_id
           KeyType: HASH
 
+  # ── Lambda execution role ─────────────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ai-code-review-agent-lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AppPermissions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt ReviewsTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: "*"
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-code-review-agent"
+
+  # ── Lambda function ───────────────────────────────────────────────────────
   CodeReviewFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: ai-code-review-agent
       PackageType: Image
-      ImageUri: !Ref ImageUri
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
       Environment:
         Variables:
           GITHUB_TOKEN: !Ref GithubToken
           API_SECRET_KEY: !Ref ApiSecretKey
           DYNAMODB_TABLE: code-reviews
           BEDROCK_MODEL_ID: !Ref BedrockModelId
-      Policies:
-        # Using raw statements with !GetAtt throughout so CloudFormation's
-        # EarlyValidation::ResourceExistenceCheck treats these as in-template
-        # dependencies rather than checking if the resources already exist.
-        - Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-                - dynamodb:UpdateItem
-                - dynamodb:DeleteItem
-                - dynamodb:Query
-                - dynamodb:Scan
-              Resource:
-                - !GetAtt ReviewsTable.Arn
-            - Effect: Allow
-              Action:
-                - bedrock:InvokeModel
-                - bedrock:InvokeModelWithResponseStream
-              Resource: "*"
-            - Effect: Allow
-              Action: lambda:InvokeFunction
-              Resource: !GetAtt CodeReviewFunction.Arn
-      Events:
-        HttpApiProxy:
-          Type: HttpApi
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-        HttpApiRoot:
-          Type: HttpApi
-          Properties:
-            Path: /
-            Method: ANY
+          AWS_REGION_NAME: !Ref AWS::Region
+
+  # ── CloudWatch log group ──────────────────────────────────────────────────
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/ai-code-review-agent"
+      RetentionInDays: 14
+
+  # ── API Gateway HTTP API ──────────────────────────────────────────────────
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: ai-code-review-agent
+      ProtocolType: HTTP
+
+  LambdaIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt CodeReviewFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  CatchAllRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "$default"
+      Target: !Sub "integrations/${LambdaIntegration}"
+
+  DefaultStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: "$default"
+      AutoDeploy: true
+
+  ApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CodeReviewFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
 
 # ── Outputs ──────────────────────────────────────────────────────────────────
 Outputs:
   ApiUrl:
     Description: Public API Gateway endpoint
-    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
 
   FunctionArn:
     Description: Lambda function ARN
