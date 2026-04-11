@@ -59,18 +59,25 @@ Resources:
           DYNAMODB_TABLE: code-reviews
           BEDROCK_MODEL_ID: !Ref BedrockModelId
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ReviewsTable
-        # Invoke Claude via Bedrock (Resource: "*" is required — foundation model
-        # ARNs are not account-scoped and can't be validated by CloudFormation)
+        # Using raw statements with !GetAtt throughout so CloudFormation's
+        # EarlyValidation::ResourceExistenceCheck treats these as in-template
+        # dependencies rather than checking if the resources already exist.
         - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !GetAtt ReviewsTable.Arn
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
               Resource: "*"
-        # Self-invoke for async background processing
-        - Statement:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !GetAtt CodeReviewFunction.Arn
