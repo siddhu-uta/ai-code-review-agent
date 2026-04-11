@@ -17,14 +17,21 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def create_review(review_id: str, pr_url: str) -> None:
+def create_review(
+    review_id: str,
+    pr_url: str,
+    comment_target: Optional[dict] = None,
+) -> None:
     """Write the initial processing record."""
-    _table().put_item(Item={
+    item: dict = {
         "review_id": review_id,
         "pr_url": pr_url,
         "status": "processing",
         "created_at": _now(),
-    })
+    }
+    if comment_target:
+        item["comment_target"] = comment_target
+    _table().put_item(Item=item)
 
 
 def finish_review(
@@ -94,4 +101,5 @@ def get_review(review_id: str) -> Optional[ReviewResponse]:
         completed_at=completed_at,
         latency_ms=latency_ms,
         steps=item.get("steps", []),
+        comment_target=item.get("comment_target"),
     )

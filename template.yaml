@@ -12,6 +12,12 @@ Parameters:
     NoEcho: true
     Description: GitHub personal access token (ghp_...)
 
+  GithubWebhookSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Secret used to verify GitHub webhook payloads (HMAC-SHA256)
+
   ApiSecretKey:
     Type: String
     NoEcho: true
@@ -86,6 +92,7 @@ Resources:
       Environment:
         Variables:
           GITHUB_TOKEN: !Ref GithubToken
+          GITHUB_WEBHOOK_SECRET: !Ref GithubWebhookSecret
           API_SECRET_KEY: !Ref ApiSecretKey
           DYNAMODB_TABLE: code-reviews
           BEDROCK_MODEL_ID: !Ref BedrockModelId

@@ -77,6 +77,22 @@ async def fetch_pr_diff(owner: str, repo: str, pr_number: int) -> dict:
     }
 
 
+async def post_pr_comment(owner: str, repo: str, pr_number: int, body: str) -> None:
+    """Post a comment on a GitHub PR."""
+    headers = {
+        "Authorization": f"Bearer {settings.github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        resp = await client.post(
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments",
+            headers=headers,
+            json={"body": body},
+        )
+        resp.raise_for_status()
+
+
 async def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Dispatch a tool call from Claude and return a string result."""
     if tool_name == "fetch_pr_diff":

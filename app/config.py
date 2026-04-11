@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     github_token: str
+    github_webhook_secret: str = ""
     aws_region: str = "us-east-1"
     dynamodb_table: str = "code-reviews"
     api_secret_key: str
