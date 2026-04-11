@@ -1,6 +1,9 @@
 import httpx
 from app.config import settings
 
+GITHUB_TIMEOUT = 30.0
+MAX_FILES = 100  # GitHub returns up to 300 files; cap to stay within token limits
+
 # Tool definition passed to Claude
 TOOLS = [
     {
@@ -30,7 +33,7 @@ async def fetch_pr_diff(owner: str, repo: str, pr_number: int) -> dict:
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=GITHUB_TIMEOUT, follow_redirects=True) as client:
         # Fetch PR metadata
         pr_resp = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
@@ -46,10 +49,11 @@ async def fetch_pr_diff(owner: str, repo: str, pr_number: int) -> dict:
         )
         diff_resp.raise_for_status()
 
-        # Fetch changed files list
+        # Fetch changed files list (capped at MAX_FILES to stay within token limits)
         files_resp = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/files",
             headers=headers,
+            params={"per_page": MAX_FILES},
         )
         files_resp.raise_for_status()
         files_data = files_resp.json()
@@ -61,7 +65,7 @@ async def fetch_pr_diff(owner: str, repo: str, pr_number: int) -> dict:
             "additions": f["additions"],
             "deletions": f["deletions"],
         }
-        for f in files_data
+        for f in files_data[:MAX_FILES]
     ]
 
     return {
