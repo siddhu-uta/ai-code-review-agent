@@ -73,7 +73,7 @@ Resources:
         - Statement:
             - Effect: Allow
               Action: lambda:InvokeFunction
-              Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-code-review-agent"
+              Resource: !GetAtt CodeReviewFunction.Arn
       Events:
         HttpApiProxy:
           Type: HttpApi
