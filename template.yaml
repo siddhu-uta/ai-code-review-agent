@@ -105,13 +105,6 @@ Resources:
             Action: lambda:InvokeFunction
             Resource: !GetAtt CodeReviewFunction.Arn
 
-  # ── CloudWatch log group ──────────────────────────────────────────────────
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/ai-code-review-agent"
-      RetentionInDays: 14
-
   # ── API Gateway HTTP API ──────────────────────────────────────────────────
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
