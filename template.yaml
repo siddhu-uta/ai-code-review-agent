@@ -5,7 +5,7 @@ Description: AI Code Review Agent — FastAPI + Claude (Bedrock) + Lambda + Dyna
 Parameters:
   ImageUri:
     Type: String
-    Description: ECR image URI (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/ai-code-review-agent:abc1234)
+    Description: ECR image URI (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/arbiter:abc1234)
 
   GithubToken:
     Type: String
@@ -42,7 +42,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ai-code-review-agent-lambda-role
+      RoleName: arbiter-lambda-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -76,7 +76,7 @@ Resources:
   CodeReviewFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: ai-code-review-agent
+      FunctionName: arbiter
       PackageType: Image
       Code:
         ImageUri: !Ref ImageUri
@@ -95,7 +95,7 @@ Resources:
   SelfInvokePolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: ai-code-review-agent-self-invoke
+      PolicyName: arbiter-self-invoke
       Roles:
         - !Ref LambdaExecutionRole
       PolicyDocument:
@@ -109,7 +109,7 @@ Resources:
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: ai-code-review-agent
+      Name: arbiter
       ProtocolType: HTTP
 
   LambdaIntegration:

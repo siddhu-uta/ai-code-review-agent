@@ -3,8 +3,8 @@ PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
 AWS_REGION   ?= us-east-1
-ECR_REPO     ?= ai-code-review-agent
-STACK_NAME   ?= ai-code-review-agent
+ECR_REPO     ?= arbiter
+STACK_NAME   ?= arbiter
 AWS_ACCOUNT  := $(shell aws sts get-caller-identity --query Account --output text)
 ECR_REGISTRY := $(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
 IMAGE_URI    := $(ECR_REGISTRY)/$(ECR_REPO):latest

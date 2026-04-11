@@ -1,4 +1,4 @@
-# AI Code Review Agent
+# Arbiter
 
 A REST API that accepts a GitHub Pull Request URL and returns a structured, actionable code review — powered by Claude's tool-use API and deployed on AWS Lambda.
 
@@ -182,7 +182,7 @@ Health check (no auth required).
 
 ```bash
 # 1. Clone and enter the project
-git clone https://github.com/siddhu-uta/ai-code-review-agent
+git clone https://github.com/siddhu-uta/arbiter
 cd ai-code-review-agent
 
 # 2. Create virtualenv and install dependencies

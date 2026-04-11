@@ -53,8 +53,6 @@ async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
     """Run the Claude tool-use agentic loop to produce a structured code review."""
     owner, repo, pr_number = _parse_owner_repo_pr(pr_url)
 
-    # AsyncAnthropicBedrock picks up AWS credentials automatically
-    # (IAM role in Lambda, ~/.aws/credentials locally)
     client = anthropic.AsyncAnthropicBedrock()
 
     messages = [

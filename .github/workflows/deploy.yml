@@ -7,8 +7,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: ai-code-review-agent
-  STACK_NAME: ai-code-review-agent
+  ECR_REPOSITORY: arbiter
+  STACK_NAME: arbiter
 
 jobs:
   # ── 1. Tests ────────────────────────────────────────────────────────────────

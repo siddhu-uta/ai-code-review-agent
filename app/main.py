@@ -121,4 +121,10 @@ def handler(event, context):
         asyncio.run(_process_review(review_id, body))
         return {"statusCode": 200}
 
-    return _http_handler(event, context)
+    # Python 3.10+ no longer auto-creates an event loop — Mangum requires one
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return _http_handler(event, context)
+    finally:
+        loop.close()

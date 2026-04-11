@@ -8,8 +8,7 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
     dynamodb_table: str = "code-reviews"
     api_secret_key: str
-    # Cross-region inference prefix gives better availability across AZs
-    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-5-20250514-v1:0"
+    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6"
 
 
 settings = Settings()
