@@ -71,9 +71,6 @@ Resources:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource: "*"
-              - Effect: Allow
-                Action: lambda:InvokeFunction
-                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-code-review-agent"
 
   # ── Lambda function ───────────────────────────────────────────────────────
   CodeReviewFunction:
@@ -93,6 +90,20 @@ Resources:
           DYNAMODB_TABLE: code-reviews
           BEDROCK_MODEL_ID: !Ref BedrockModelId
           AWS_REGION_NAME: !Ref AWS::Region
+
+  # Separate policy for self-invoke so !GetAtt resolves after the function exists
+  SelfInvokePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ai-code-review-agent-self-invoke
+      Roles:
+        - !Ref LambdaExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: !GetAtt CodeReviewFunction.Arn
 
   # ── CloudWatch log group ──────────────────────────────────────────────────
   LambdaLogGroup:
