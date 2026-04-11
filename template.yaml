@@ -61,15 +61,14 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReviewsTable
-        # Invoke Claude via Bedrock (no API key needed — IAM handles auth)
+        # Invoke Claude via Bedrock (Resource: "*" is required — foundation model
+        # ARNs are not account-scoped and can't be validated by CloudFormation)
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
-              Resource:
-                - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5*"
-                - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-5*"
+              Resource: "*"
         # Self-invoke for async background processing
         - Statement:
             - Effect: Allow
