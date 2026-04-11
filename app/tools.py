@@ -30,7 +30,7 @@ async def fetch_pr_diff(owner: str, repo: str, pr_number: int) -> dict:
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         # Fetch PR metadata
         pr_resp = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
