@@ -93,12 +93,18 @@ async def run_review_agent(
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason == "end_turn":
-            _step("Writing structured review...")
             text_block = next(
                 (b for b in response.content if b.type == "text"), None
             )
-            if not text_block:
-                raise ValueError("Claude returned no text content")
+            # Claude sometimes returns end_turn with an empty text block
+            # (e.g. trivial diffs). Nudge it to produce the JSON output.
+            if not text_block or not text_block.text.strip():
+                messages.append({
+                    "role": "user",
+                    "content": "Please now output your structured JSON review.",
+                })
+                continue
+            _step("Writing structured review...")
             return _parse_review(text_block.text)
 
         if response.stop_reason == "tool_use":
