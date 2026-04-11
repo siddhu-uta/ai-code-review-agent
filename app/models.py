@@ -58,3 +58,4 @@ class ReviewResponse(BaseModel):
     created_at: Optional[str] = None
     completed_at: Optional[str] = None
     latency_ms: Optional[int] = None
+    steps: list[dict] = []

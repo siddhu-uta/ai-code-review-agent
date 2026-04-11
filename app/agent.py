@@ -1,10 +1,12 @@
 import json
 import re
+from typing import Optional
 import anthropic
 
 from app.config import settings
 from app.models import FocusArea, Issue, ReviewResult, Severity, Verdict
 from app.tools import TOOLS, execute_tool
+from app import storage
 
 MAX_TOKENS = 4096
 
@@ -49,8 +51,17 @@ def _parse_owner_repo_pr(pr_url: str) -> tuple[str, str, int]:
     return owner, repo, int(pr_num)
 
 
-async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
+async def run_review_agent(
+    pr_url: str,
+    focus: list[FocusArea],
+    review_id: Optional[str] = None,
+) -> ReviewResult:
     """Run the Claude tool-use agentic loop to produce a structured code review."""
+
+    def _step(text: str) -> None:
+        if review_id:
+            storage.append_step(review_id, text)
+
     owner, repo, pr_number = _parse_owner_repo_pr(pr_url)
 
     client = anthropic.AsyncAnthropicBedrock()
@@ -66,6 +77,8 @@ async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
         }
     ]
 
+    _step(f"Claude invoked — model: {settings.bedrock_model_id.split('.')[-1]}")
+
     # Agentic loop — Claude may call tools multiple times
     while True:
         response = await client.messages.create(
@@ -80,7 +93,7 @@ async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason == "end_turn":
-            # Extract the text block with the JSON review
+            _step("Writing structured review...")
             text_block = next(
                 (b for b in response.content if b.type == "text"), None
             )
@@ -93,7 +106,23 @@ async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
             for block in response.content:
                 if block.type != "tool_use":
                     continue
+                _step(f"Tool called → {block.name}")
                 tool_output = await execute_tool(block.name, block.input)
+
+                # Surface diff stats in the activity feed
+                if block.name == "fetch_pr_diff":
+                    try:
+                        diff_data = json.loads(tool_output)
+                        files = len(diff_data.get("changed_files", []))
+                        additions = diff_data.get("additions", 0)
+                        deletions = diff_data.get("deletions", 0)
+                        _step(
+                            f"Diff fetched — {files} file{'s' if files != 1 else ''}, "
+                            f"+{additions} −{deletions} lines"
+                        )
+                    except Exception:
+                        _step("Diff fetched from GitHub")
+
                 tool_results.append(
                     {
                         "type": "tool_result",
@@ -101,6 +130,7 @@ async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
                         "content": tool_output,
                     }
                 )
+            _step("Claude is analyzing the diff...")
             messages.append({"role": "user", "content": tool_results})
             continue
 

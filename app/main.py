@@ -5,6 +5,7 @@ import uuid
 
 import boto3
 from fastapi import FastAPI, HTTPException, Security, status
+from fastapi.responses import FileResponse
 from fastapi.security.api_key import APIKeyHeader
 from mangum import Mangum
 
@@ -13,7 +14,7 @@ from app.config import settings
 from app.models import FocusArea, ReviewRequest, ReviewResponse, ReviewStarted
 from app.storage import create_review, finish_review, get_review
 
-app = FastAPI(title="AI Code Review Agent", version="1.0.0")
+app = FastAPI(title="Arbiter", version="1.0.0")
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -28,6 +29,11 @@ def _require_api_key(api_key: str = Security(api_key_header)) -> str:
             detail="Invalid or missing API key",
         )
     return api_key
+
+
+@app.get("/")
+async def index():
+    return FileResponse("app/static/index.html")
 
 
 @app.get("/health")
@@ -66,6 +72,33 @@ async def get_review_result(
     return result
 
 
+# ── Demo endpoints (no API key required — for the public UI) ────────────────
+
+@app.post("/demo/review", response_model=ReviewStarted, status_code=202)
+async def demo_start_review(body: ReviewRequest):
+    try:
+        _parse_owner_repo_pr(body.pr_url)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail="pr_url must be a valid GitHub PR URL (https://github.com/owner/repo/pull/N)",
+        )
+    review_id = str(uuid.uuid4())
+    create_review(review_id=review_id, pr_url=body.pr_url)
+    await _kick_off_processing(review_id, body)
+    return ReviewStarted(review_id=review_id)
+
+
+@app.get("/demo/review/{review_id}", response_model=ReviewResponse)
+async def demo_get_review(review_id: str):
+    result = get_review(review_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return result
+
+
+# ── Internal helpers ─────────────────────────────────────────────────────────
+
 async def _kick_off_processing(review_id: str, body: ReviewRequest) -> None:
     """Start processing: async self-invoke on Lambda, background task locally."""
     if _IS_LAMBDA:
@@ -92,7 +125,7 @@ def _invoke_lambda_async(review_id: str, body: ReviewRequest) -> None:
 
 async def _process_review(review_id: str, body: ReviewRequest) -> None:
     try:
-        review_result = await run_review_agent(pr_url=body.pr_url, focus=body.focus)
+        review_result = await run_review_agent(pr_url=body.pr_url, focus=body.focus, review_id=review_id)
         finish_review(
             review_id=review_id,
             status="complete",

@@ -54,6 +54,18 @@ def finish_review(
     )
 
 
+def append_step(review_id: str, text: str) -> None:
+    """Atomically append a progress step to the review record."""
+    _table().update_item(
+        Key={"review_id": review_id},
+        UpdateExpression="SET steps = list_append(if_not_exists(steps, :empty), :step)",
+        ExpressionAttributeValues={
+            ":step": [{"text": text, "at": _now()}],
+            ":empty": [],
+        },
+    )
+
+
 def get_review(review_id: str) -> Optional[ReviewResponse]:
     try:
         resp = _table().get_item(Key={"review_id": review_id})
@@ -81,4 +93,5 @@ def get_review(review_id: str) -> Optional[ReviewResponse]:
         created_at=created_at,
         completed_at=completed_at,
         latency_ms=latency_ms,
+        steps=item.get("steps", []),
     )
