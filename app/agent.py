@@ -6,7 +6,6 @@ from app.config import settings
 from app.models import FocusArea, Issue, ReviewResult, Severity, Verdict
 from app.tools import TOOLS, execute_tool
 
-MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 
 
@@ -54,7 +53,9 @@ async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
     """Run the Claude tool-use agentic loop to produce a structured code review."""
     owner, repo, pr_number = _parse_owner_repo_pr(pr_url)
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    # AsyncAnthropicBedrock picks up AWS credentials automatically
+    # (IAM role in Lambda, ~/.aws/credentials locally)
+    client = anthropic.AsyncAnthropicBedrock()
 
     messages = [
         {
@@ -70,7 +71,7 @@ async def run_review_agent(pr_url: str, focus: list[FocusArea]) -> ReviewResult:
     # Agentic loop — Claude may call tools multiple times
     while True:
         response = await client.messages.create(
-            model=MODEL,
+            model=settings.bedrock_model_id,
             max_tokens=MAX_TOKENS,
             system=_build_system_prompt(focus),
             tools=TOOLS,

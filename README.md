@@ -190,7 +190,8 @@ make install
 
 # 3. Configure environment
 cp .env.example .env
-# Fill in: ANTHROPIC_API_KEY, GITHUB_TOKEN, API_SECRET_KEY
+# Fill in: GITHUB_TOKEN, API_SECRET_KEY
+# Ensure AWS credentials are configured (aws configure) for Bedrock access
 
 # 4. Run the server
 make run
@@ -234,9 +235,10 @@ The GitHub Actions pipeline handles everything after first-time setup:
 | Secret | Description |
 |---|---|
 | `AWS_ROLE_ARN` | IAM role ARN (used via OIDC — no long-lived keys) |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
 | `GITHUB_TOKEN_SECRET` | GitHub PAT for fetching PR diffs |
 | `API_SECRET_KEY` | Secret for `X-API-Key` header |
+
+> No `ANTHROPIC_API_KEY` needed — Claude is invoked via AWS Bedrock using the Lambda's IAM role.
 
 ---
 
@@ -257,8 +259,10 @@ A single `template.yaml` (SAM/CloudFormation) defines all AWS resources. `make b
 
 | Variable | Description |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key |
 | `GITHUB_TOKEN` | GitHub PAT (needs `repo` scope for private repos, none for public) |
 | `API_SECRET_KEY` | Shared secret for API key auth |
 | `DYNAMODB_TABLE` | DynamoDB table name (default: `code-reviews`) |
 | `AWS_REGION` | AWS region (default: `us-east-1`) |
+| `BEDROCK_MODEL_ID` | Bedrock model ID (default: `us.anthropic.claude-sonnet-4-5-20250514-v1:0`) |
+
+> Claude is accessed via **AWS Bedrock** — no Anthropic API key required. Auth is handled by the IAM role attached to the Lambda function (or your local AWS credentials).

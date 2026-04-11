@@ -73,7 +73,7 @@ async def test_run_review_agent_tool_use():
     end_turn_response.content = [text_block]
 
     with (
-        patch("app.agent.anthropic.AsyncAnthropic") as mock_anthropic,
+        patch("app.agent.anthropic.AsyncAnthropicBedrock") as mock_anthropic,
         patch("app.agent.execute_tool", new_callable=AsyncMock) as mock_exec,
     ):
         mock_client = AsyncMock()

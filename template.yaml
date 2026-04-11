@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI Code Review Agent — FastAPI + Claude tool use on Lambda + DynamoDB
+Description: AI Code Review Agent — FastAPI + Claude (Bedrock) + Lambda + DynamoDB
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 Parameters:
@@ -9,11 +9,6 @@ Parameters:
     Description: >
       ECR image URI for the Lambda function.
       Example: 123456789012.dkr.ecr.us-east-1.amazonaws.com/ai-code-review-agent:abc1234
-
-  AnthropicApiKey:
-    Type: String
-    NoEcho: true
-    Description: Anthropic API key (sk-ant-...)
 
   GithubToken:
     Type: String
@@ -25,16 +20,20 @@ Parameters:
     NoEcho: true
     Description: Secret sent in the X-API-Key request header
 
+  BedrockModelId:
+    Type: String
+    Default: "us.anthropic.claude-sonnet-4-5-20250514-v1:0"
+    Description: Bedrock cross-region inference model ID
+
 # ── Globals ──────────────────────────────────────────────────────────────────
 Globals:
   Function:
-    Timeout: 300        # 5 minutes — enough for any PR review
+    Timeout: 300
     MemorySize: 512
 
 # ── Resources ────────────────────────────────────────────────────────────────
 Resources:
 
-  # DynamoDB table for review results
   ReviewsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -47,7 +46,6 @@ Resources:
         - AttributeName: review_id
           KeyType: HASH
 
-  # Lambda function (container image from ECR)
   CodeReviewFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -56,22 +54,28 @@ Resources:
       ImageUri: !Ref ImageUri
       Environment:
         Variables:
-          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
           GITHUB_TOKEN: !Ref GithubToken
           API_SECRET_KEY: !Ref ApiSecretKey
           DYNAMODB_TABLE: code-reviews
-          # AWS_REGION is injected automatically by the Lambda runtime
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
       Policies:
-        # Read/write to our DynamoDB table
         - DynamoDBCrudPolicy:
             TableName: !Ref ReviewsTable
+        # Invoke Claude via Bedrock (no API key needed — IAM handles auth)
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource:
+                - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5*"
+                - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-5*"
         # Self-invoke for async background processing
         - Statement:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-code-review-agent"
       Events:
-        # Catch-all proxy for all HTTP methods and paths
         HttpApiProxy:
           Type: HttpApi
           Properties:
